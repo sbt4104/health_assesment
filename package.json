@@ -18,5 +18,12 @@
   },
   "engines": {
     "node": "18.x"
+  },
+  "vercel": {
+    "functions": {
+      "server/index.js": {
+        "maxDuration": 30
+      }
+    }
   }
 } 
