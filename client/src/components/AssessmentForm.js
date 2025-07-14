@@ -223,6 +223,9 @@ const AssessmentForm = () => {
     setIsSubmitting(true);
     
     try {
+      console.log('Making API call to:', API_ENDPOINTS.assessment);
+      console.log('Request data:', data);
+      
       const response = await fetch(API_ENDPOINTS.assessment, {
         method: 'POST',
         headers: {
@@ -231,7 +234,17 @@ const AssessmentForm = () => {
         body: JSON.stringify(data),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('HTTP Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const result = await response.json();
+      console.log('API Response:', result);
 
       if (result.success) {
         // Store assessment data in localStorage for results page
@@ -243,7 +256,12 @@ const AssessmentForm = () => {
       }
     } catch (error) {
       console.error('Assessment error:', error);
-      toast.error('Error generating assessment. Please try again.');
+      
+      if (error.message.includes('Proxy error') || error.message.includes('Failed to fetch')) {
+        toast.error('Cannot connect to server. Please check if the backend is running.');
+      } else {
+        toast.error(`Error generating assessment: ${error.message}`);
+      }
     } finally {
       setIsSubmitting(false);
     }
