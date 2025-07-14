@@ -7,21 +7,20 @@
       "config": {
         "distDir": "build"
       }
+    },
+    {
+      "src": "server/**/*.js",
+      "use": "@vercel/node"
     }
   ],
-  "functions": {
-    "api/assessment.js": {
-      "maxDuration": 30
-    }
-  },
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/assessment.js"
+      "dest": "/server/$1"
     },
     {
       "src": "/(.*)",
       "dest": "/client/build/$1"
     }
   ]
-} 
+}
