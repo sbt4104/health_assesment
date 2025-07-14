@@ -1,27 +1,11 @@
-const express = require('express');
-const cors = require('cors');
-const FitnessCalculations = require('../server/utils/fitnessCalculations');
-
-const app = express();
-
-// Middleware
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-app.vercel.app', 'https://your-app.netlify.app', 'http://localhost:3000']
-    : ['http://localhost:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-}));
-
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+const FitnessCalculations = require('./utils/fitnessCalculations');
 
 // Validation middleware
-const validateAssessmentInput = (req, res, next) => {
+const validateAssessmentInput = (body) => {
   const {
     name, age, height, currentWeight, gender, activityLevel,
     primaryGoal, workoutFrequency, sessionDuration
-  } = req.body;
+  } = body;
 
   const errors = [];
 
@@ -63,68 +47,100 @@ const validateAssessmentInput = (req, res, next) => {
   }
 
   // Optional fields validation
-  if (req.body.targetWeight) {
-    if (req.body.targetWeight < 80 || req.body.targetWeight > 500) {
+  if (body.targetWeight) {
+    if (body.targetWeight < 80 || body.targetWeight > 500) {
       errors.push('Target weight must be between 80 and 500 lbs');
     }
   }
 
-  if (req.body.bodyFatPercentage) {
-    if (req.body.bodyFatPercentage < 5 || req.body.bodyFatPercentage > 50) {
+  if (body.bodyFatPercentage) {
+    if (body.bodyFatPercentage < 5 || body.bodyFatPercentage > 50) {
       errors.push('Body fat percentage must be between 5 and 50%');
     }
   }
 
-  if (req.body.skeletalMuscleMass) {
-    if (req.body.skeletalMuscleMass < 20 || req.body.skeletalMuscleMass > 200) {
+  if (body.skeletalMuscleMass) {
+    if (body.skeletalMuscleMass < 20 || body.skeletalMuscleMass > 200) {
       errors.push('Skeletal muscle mass must be between 20 and 200 lbs');
     }
   }
 
-  if (req.body.restingHeartRate) {
-    if (req.body.restingHeartRate < 40 || req.body.restingHeartRate > 120) {
+  if (body.restingHeartRate) {
+    if (body.restingHeartRate < 40 || body.restingHeartRate > 120) {
       errors.push('Resting heart rate must be between 40 and 120 bpm');
     }
   }
 
-  if (errors.length > 0) {
-    return res.status(400).json({
-      success: false,
-      errors: errors
-    });
-  }
-
-  next();
+  return errors;
 };
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Fitness Assessment API is running',
-    timestamp: new Date().toISOString()
-  });
-});
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Credentials': 'true'
+};
 
-// Generate fitness assessment
-app.post('/api/assessment', validateAssessmentInput, (req, res) => {
+// Vercel serverless function handler
+module.exports = async (req, res) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.status(200).end();
+    return;
+  }
+
+  // Set CORS headers for all responses
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
+
   try {
-    const assessment = FitnessCalculations.generateCompleteAssessment(req.body);
-    
-    res.json({
-      success: true,
-      data: assessment,
-      message: 'Assessment generated successfully'
-    });
-  } catch (error) {
-    console.error('Assessment generation error:', error);
-    res.status(500).json({
+    // Health check endpoint
+    if (req.method === 'GET' && req.url === '/api/health') {
+      return res.status(200).json({
+        success: true,
+        message: 'Fitness Assessment API is running',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Generate fitness assessment
+    if (req.method === 'POST' && req.url === '/api/assessment') {
+      const errors = validateAssessmentInput(req.body);
+      
+      if (errors.length > 0) {
+        return res.status(400).json({
+          success: false,
+          errors: errors
+        });
+      }
+
+      const assessment = FitnessCalculations.generateCompleteAssessment(req.body);
+      
+      return res.status(200).json({
+        success: true,
+        data: assessment,
+        message: 'Assessment generated successfully'
+      });
+    }
+
+    // Default response for unmatched routes
+    return res.status(404).json({
       success: false,
-      message: 'Error generating assessment',
+      message: 'Endpoint not found'
+    });
+
+  } catch (error) {
+    console.error('API Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
       error: error.message
     });
   }
-});
-
-// Export for Vercel
-module.exports = app; 
+}; 
